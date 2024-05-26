@@ -28,7 +28,9 @@ public class ExceptionAdviceHandler extends ResponseEntityExceptionHandler {
     }
 
     private ErrorResponse makeErrorResponse(ErrorCode errorCode) {
-        return ErrorResponse.builder().code(errorCode).build();
+        return ErrorResponse.builder().status(errorCode.getHttpStatus())
+                .code(errorCode.name())
+                .message(errorCode.getMessage()).build();
     }
 }
 
