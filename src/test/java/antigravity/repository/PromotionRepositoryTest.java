@@ -2,6 +2,7 @@ package antigravity.repository;
 
 import antigravity.config.QuerydslConfigTest;
 import antigravity.domain.entity.Promotion;
+import com.querydsl.core.types.Expression;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.core.types.dsl.StringExpression;
@@ -16,10 +17,10 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.beans.Expression;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -55,12 +56,16 @@ class PromotionRepositoryTest {
 
         //given
         int productId = 1;
+        int[] couponIds = {3, 4};
+        List<Integer> ids = Arrays.stream(couponIds).boxed().toList();
+
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
 
         //when
         List<Promotion> promotions = queryFactory.select(promotion)
                 .from(promotion)
                 .leftJoin(promotionProducts).on(promotion.id.eq(promotionProducts.promotionId))
+                .where(promotion.id.in(ids))
                 .where(promotionProducts.productId.eq(productId))
                 .where(promotion.use_started_at.before(today).and(promotion.use_ended_at.after(today))).fetch();
 

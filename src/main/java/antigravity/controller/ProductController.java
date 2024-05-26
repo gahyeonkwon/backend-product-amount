@@ -22,7 +22,6 @@ public class ProductController {
     public ResponseEntity<ProductAmountResponse> getProductAmount() {
 
         ProductAmountResponse response = service.getProductAmount(getParam());
-
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 

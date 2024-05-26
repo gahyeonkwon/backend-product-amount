@@ -4,11 +4,15 @@ import antigravity.config.QuerydslConfigTest;
 import antigravity.domain.dto.PromotionDto;
 import antigravity.domain.entity.Product;
 import antigravity.domain.entity.Promotion;
+import antigravity.exception.CustomException;
+import antigravity.exception.code.ProductAmountErrorCode5xx;
+import antigravity.model.request.ProductInfoRequest;
 import antigravity.model.response.ProductAmountResponse;
 import antigravity.repository.PromotionRepository;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +22,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Arrays;
 import java.util.List;
 
 import static antigravity.domain.dto.PromotionDto.entityToDto;
@@ -33,6 +38,9 @@ class ProductServiceTest {
     @Autowired
     PromotionRepository promotionRepository;
 
+    @Autowired
+    ProductService productService;
+
 
     @Test
     @DisplayName("코드별 할인혜택 분리")
@@ -40,7 +48,9 @@ class ProductServiceTest {
 
         //given
         int productId  = 1;
-        List<Promotion> promotions = promotionRepository.findPromotionByProductId(productId, LocalDate.now(ZoneId.of("Asia/Seoul")));
+        int[] couponIds = {3, 4};
+        List<Integer> ids = Arrays.stream(couponIds).boxed().toList();
+        List<Promotion> promotions = promotionRepository.findPromotionByProductId(productId, ids, LocalDate.now(ZoneId.of("Asia/Seoul")));
         List<PromotionDto> promotionsDto = promotions.stream().map(p -> entityToDto(p)).toList();
 
         //when
@@ -54,13 +64,32 @@ class ProductServiceTest {
     }
 
     @Test
+    @DisplayName("천단위 절삭")
+    void cutFinalPrice() {
+        //given
+        int price = 500;
+        int price2 = 1500;
+
+        //when
+        int finalPrice = cutFinalPrice(price);
+        int finalPrice2 = cutFinalPrice(price2);
+
+        //then
+        assertThat(finalPrice).isEqualTo(0);
+        assertThat(finalPrice2).isEqualTo(1000);
+    }
+
+
+    @Test
     @DisplayName("할인적용")
     void getProductAmount() {
 
         //given
         int productId  = 1;
+        int[] couponIds = {3, 4};
+        List<Integer> ids = Arrays.stream(couponIds).boxed().toList();
 
-        List<Promotion> promotions = promotionRepository.findPromotionByProductId(productId, LocalDate.now(ZoneId.of("Asia/Seoul")));
+        List<Promotion> promotions = promotionRepository.findPromotionByProductId(productId, ids, LocalDate.now(ZoneId.of("Asia/Seoul")));
         List<PromotionDto> promotionsDto = promotions.stream().map(p -> entityToDto(p)).toList();
 
         List<PromotionDto> codes = promotionsDto.stream().filter(p -> p.getPromotion_type().equalsIgnoreCase("CODE")).toList();
@@ -108,7 +137,7 @@ class ProductServiceTest {
         totalDiscountPrice = codeDiscountPrice + couponDiscountPrice;
 
         // 1000 단위 절삭
-        finalPrice = getFinalPrice(finalPrice);
+        finalPrice = cutFinalPrice(finalPrice);
 
         //then
         assertThat(originPrice).isEqualTo(215000);
@@ -119,7 +148,53 @@ class ProductServiceTest {
 
     }
 
-    private static int getFinalPrice(int finalPrice) {
+    @Test
+    @DisplayName("FINAL_PRICE_IS_MINUS 에러 발생 테스트 ")
+    void make5xxError_1() {
+        //given
+        int finalPrice = -10000;
+
+        //when, then
+        CustomException customException = Assertions.assertThrows(CustomException.class, () -> minusPriceTest(finalPrice));
+        assertThat(customException.getErrorCode().name()).isEqualTo("FINAL_PRICE_IS_MINUS");
+
+    }
+    @Test
+    @DisplayName("CANNOT_FOUND_PRODUCT 에러 발생 테스트 ")
+    void make5xxError_2() {
+        //given
+        int[] couponIds = {1, 2};
+        ProductInfoRequest request = ProductInfoRequest.builder()
+                .productId(2)
+                .couponIds(couponIds)
+                .build();
+
+        //when, then
+        CustomException customException = Assertions.assertThrows(CustomException.class, () -> productService.getProductAmount(request));
+        assertThat(customException.getErrorCode().name()).isEqualTo("CANNOT_FOUND_PRODUCT");
+
+    }
+
+    @Test
+    @DisplayName("CANNOT_FOUND_PROMOTION 에러 발생 테스트 ")
+    void make5xxError_3() {
+        //given
+        int[] couponIds = {5, 6};
+        ProductInfoRequest request = ProductInfoRequest.builder()
+                .productId(1)
+                .couponIds(couponIds)
+                .build();
+
+        //when, then
+        CustomException customException = Assertions.assertThrows(CustomException.class, () -> productService.getProductAmount(request));
+        assertThat(customException.getErrorCode().name()).isEqualTo("CANNOT_FOUND_PROMOTION");
+    }
+
+
+    private void minusPriceTest(int finalPrice) {
+        if (!priceIsNotZero(finalPrice)) throw new CustomException(ProductAmountErrorCode5xx.FINAL_PRICE_IS_MINUS);
+    }
+    private static int cutFinalPrice(int finalPrice) {
         finalPrice = (int) (floor(finalPrice /1000) * 1000);
         return finalPrice;
     }
