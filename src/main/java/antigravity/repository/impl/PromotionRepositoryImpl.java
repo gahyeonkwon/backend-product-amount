@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 
 import static antigravity.domain.entity.QPromotion.promotion;
@@ -20,11 +21,12 @@ public class PromotionRepositoryImpl implements PromotionRepositoryCustom {
     private final JPAQueryFactory queryFactory;
 
     @Override
-    public List<Promotion> findPromotionByProductId(Integer productId, LocalDate validDate) {
+    public List<Promotion> findPromotionByProductId(Integer productId, List<Integer> couponIds, LocalDate validDate) {
 
         List<Promotion> promotions = queryFactory.select(promotion)
                 .from(promotion)
                 .leftJoin(promotionProducts).on(promotion.id.eq(promotionProducts.promotionId))
+                .where(promotion.id.in(couponIds))
                 .where(promotionProducts.productId.eq(productId))
                 .where(promotion.use_started_at.before(validDate).and(promotion.use_ended_at.after(validDate))).fetch();
 

@@ -7,5 +7,5 @@ import java.util.List;
 
 public interface PromotionRepositoryCustom {
 
-    List<Promotion> findPromotionByProductId(Integer productId, LocalDate validDate);
+    List<Promotion> findPromotionByProductId(Integer productId,  List<Integer> couponIds, LocalDate validDate);
 }
