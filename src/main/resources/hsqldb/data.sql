@@ -9,6 +9,8 @@ VALUES (4, 'CODE', '15% 할인코드2', 'PERCENT', 15, '2022-11-01', '2024-05-30
 
 INSERT INTO product
 VALUES (1, '피팅노드상품', 215000);
+INSERT INTO product
+VALUES (2, '피팅노드상품2', 50005000);
 
 
 INSERT INTO promotion_products
