@@ -1,23 +1,17 @@
 package antigravity.service;
 
-import antigravity.config.QuerydslConfigTest;
 import antigravity.domain.dto.PromotionDto;
-import antigravity.domain.entity.Product;
 import antigravity.domain.entity.Promotion;
 import antigravity.exception.CustomException;
 import antigravity.exception.code.ProductAmountErrorCode5xx;
 import antigravity.model.request.ProductInfoRequest;
-import antigravity.model.response.ProductAmountResponse;
 import antigravity.repository.PromotionRepository;
-import com.querydsl.jpa.impl.JPAQueryFactory;
-import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
@@ -190,6 +184,80 @@ class ProductServiceTest {
         assertThat(customException.getErrorCode().name()).isEqualTo("CANNOT_FOUND_PROMOTION");
     }
 
+    @Test
+    @DisplayName("INVALID_REQUEST 에러 발생 테스트")
+    void make5xxError_4() {
+        //given
+        ProductInfoRequest request = null;
+
+        //when, then
+        CustomException customException = Assertions.assertThrows(CustomException.class, () -> productService.getProductAmount(request));
+        assertThat(customException.getErrorCode().name()).isEqualTo("INVALID_REQUEST");
+    }
+
+    @Test
+    @DisplayName("INVALID_PRODUCT_PRICE 에러 발생 테스트")
+    void make5xxError_5() {
+        //given
+        int[] couponIds = {5, 6};
+        ProductInfoRequest request = ProductInfoRequest.builder()
+                .productId(2)
+                .couponIds(couponIds)
+                .build();
+
+        //when, then
+        CustomException customException = Assertions.assertThrows(CustomException.class, () -> productService.getProductAmount(request));
+        assertThat(customException.getErrorCode().name()).isEqualTo("INVALID_PRODUCT_PRICE");
+    }
+
+    @Test
+    @DisplayName("할인적용_2_프로모션타입별_객체분리")
+    void getProductAmount2() {
+
+        //given
+        int productId  = 1;
+        int[] couponIds = {3, 4};
+        List<Integer> ids = Arrays.stream(couponIds).boxed().toList();
+
+        List<Promotion> promotions = promotionRepository.findPromotionByProductId(productId, ids, LocalDate.now(ZoneId.of("Asia/Seoul")));
+        List<PromotionDto> promotionsDto = promotions.stream().map(p -> entityToDto(p)).toList();
+
+        List<PromotionDto> codes = promotionsDto.stream().filter(p -> p.getPromotion_type().equalsIgnoreCase("CODE")).toList();
+        List<PromotionDto> coupons = promotionsDto.stream().filter(p -> p.getPromotion_type().equalsIgnoreCase("COUPON")).toList();
+        int originPrice = 215000;
+        int finalPrice = originPrice;
+        int totalDiscountPrice = 0;
+
+        //when
+        List<PromotionDto> sortedCodes = codes.stream().sorted().toList();
+        int codeDiscountPrice = new CodeDiscountRequest().getDiscount(sortedCodes, finalPrice);
+        log.info("codeDiscountPrice = {}", codeDiscountPrice);
+
+        finalPrice = minusPromotionalPrice(finalPrice, codeDiscountPrice);
+        int couponDiscountPrice = new CouponDiscountRequest().getDiscount(coupons, finalPrice);
+        log.info("couponDiscountPrice = {}", couponDiscountPrice);
+
+        finalPrice = minusPromotionalPrice(finalPrice, couponDiscountPrice);
+        log.info("finalPrice = {}", finalPrice);
+
+        totalDiscountPrice = codeDiscountPrice + couponDiscountPrice;
+
+        // 1000 단위 절삭
+        finalPrice = cutFinalPrice(finalPrice);
+
+        //then
+        assertThat(originPrice).isEqualTo(215000);
+        assertThat(codeDiscountPrice).isEqualTo(32250);
+        assertThat(couponDiscountPrice).isEqualTo(30000);
+        assertThat(totalDiscountPrice).isEqualTo(62250);
+        assertThat(finalPrice).isEqualTo(152000);
+
+    }
+
+    private int minusPromotionalPrice(int finalPrice, int discountPrice) {
+        finalPrice = finalPrice - discountPrice;
+        return finalPrice;
+    }
 
     private void minusPriceTest(int finalPrice) {
         if (!priceIsNotZero(finalPrice)) throw new CustomException(ProductAmountErrorCode5xx.FINAL_PRICE_IS_MINUS);
